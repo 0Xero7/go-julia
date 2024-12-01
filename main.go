@@ -16,7 +16,7 @@ const height = 1024
 
 const centerX float64 = -0.6596510985176695 //.75 // -1.04180483110546
 const centerY float64 = -0.3362177249890653 //0.1               // 0.346342664848392
-const scale = 2.0404446148e+05              // 128
+const scale = 256                           // 128
 
 const scaleFactorX = float64(3) / (width * scale)
 const scaleFactorY = float64(3) / (height * scale)
