@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math/cmplx"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,14 +11,20 @@ import (
 	"fyne.io/fyne/v2/canvas"
 )
 
-var iterations = 1
-var value [1024][1024]complex128
-var explodesAt [1024][1024]int
-var maxExplodesAt = 1
+const width = 1024
+const height = 1024
 
-var scale = 128
-var offsetX float64 = .75 // -1.04180483110546
-var offsetY float64 = 0.1 // 0.346342664848392
+const centerX float64 = -0.6596510985176695 //.75 // -1.04180483110546
+const centerY float64 = -0.3362177249890653 //0.1               // 0.346342664848392
+const scale = 2.0404446148e+05              // 128
+
+const scaleFactorX = float64(3) / (width * scale)
+const scaleFactorY = float64(3) / (height * scale)
+
+var iterations = 1
+var value [width][height]AComplex
+var explodesAt [width][height]int
+var maxExplodesAt = 1
 
 type Pair struct {
 	x int
@@ -42,22 +47,29 @@ func DoProcess(pair Pair, completed chan Message) {
 		return
 	}
 
-	x := (float64(pair.x-512) / float64(200.0*scale)) - offsetX
-	y := (float64(pair.y-512) / float64(200.0*scale)) - offsetY
-	z := value[pair.x][pair.y]
-	c := complex(x, y)
+	dx := float64(pair.x - (width / 2))
+	dy := float64(pair.y - (height / 2))
 
-	for range 100 {
-		z = cmplx.Pow(z, 2) + c
+	x := centerX + dx*scaleFactorX
+	y := centerY + dy*scaleFactorY
+
+	// x := (float64(pair.x-(width/2)) / float64(scaleFactorX)) - offsetX
+	// y := (float64(pair.y-(height/2)) / float64(scaleFactorY)) - offsetY
+	z := value[pair.x][pair.y]
+	c := New(x, y)
+
+	for i := range 100 {
+		z = Add(Mul(z, z), *c)
+		if Gt2(z) {
+			explodesAt[pair.x][pair.y] = 100*(iterations-1) + i
+			if explodesAt[pair.x][pair.y] > maxExplodesAt {
+				maxExplodesAt = explodesAt[pair.x][pair.y]
+			}
+			break
+		}
 	}
 
 	value[pair.x][pair.y] = z
-	if cmplx.Abs(z) > 2 {
-		explodesAt[pair.x][pair.y] = iterations
-		if explodesAt[pair.x][pair.y] > maxExplodesAt {
-			maxExplodesAt = explodesAt[pair.x][pair.y]
-		}
-	}
 
 	completed <- Message{
 		x:        pair.x,
@@ -66,73 +78,32 @@ func DoProcess(pair Pair, completed chan Message) {
 	}
 }
 
-func spectral_color(l float64) color.RGBA { // RGB <0,1> <- lambda l <400,700> [nm] {
-	var t float64 = 0
-	var r float64 = 0
-	var g float64 = 0
-	var b float64 = 0
-
-	if (l >= 400.0) && (l < 410.0) {
-		t = (l - 400.0) / (410.0 - 400.0)
-		r = +(0.33 * t) - (0.20 * t * t)
-	} else if (l >= 410.0) && (l < 475.0) {
-		t = (l - 410.0) / (475.0 - 410.0)
-		r = 0.14 - (0.13 * t * t)
-	} else if (l >= 545.0) && (l < 595.0) {
-		t = (l - 545.0) / (595.0 - 545.0)
-		r = +(1.98 * t) - (t * t)
-	} else if (l >= 595.0) && (l < 650.0) {
-		t = (l - 595.0) / (650.0 - 595.0)
-		r = 0.98 + (0.06 * t) - (0.40 * t * t)
-	} else if (l >= 650.0) && (l < 700.0) {
-		t = (l - 650.0) / (700.0 - 650.0)
-		r = 0.65 - (0.84 * t) + (0.20 * t * t)
-	}
-
-	if (l >= 415.0) && (l < 475.0) {
-		t = (l - 415.0) / (475.0 - 415.0)
-		g = +(0.80 * t * t)
-	} else if (l >= 475.0) && (l < 590.0) {
-		t = (l - 475.0) / (590.0 - 475.0)
-		g = 0.8 + (0.76 * t) - (0.80 * t * t)
-	} else if (l >= 585.0) && (l < 639.0) {
-		t = (l - 585.0) / (639.0 - 585.0)
-		g = 0.84 - (0.84 * t)
-	}
-
-	if (l >= 400.0) && (l < 475.0) {
-		t = (l - 400.0) / (475.0 - 400.0)
-		b = +(2.20 * t) - (1.50 * t * t)
-	} else if (l >= 475.0) && (l < 560.0) {
-		t = (l - 475.0) / (560.0 - 475.0)
-		b = 0.7 - (t) + (0.30 * t * t)
-	}
-
-	return color.RGBA{uint8(255 * r), uint8(255 * g), uint8(255 * b), 255}
-}
-
 func main() {
 	a := app.New()
 	w := a.NewWindow("Images")
+
+	// imageLock := sync.Mutex{}
 
 	quitCh := make(chan bool)
 	workerCompleted := make(chan Message)
 	passCompleted := make(chan bool)
 
-	width := 1024
-	height := 1024
 	image := image.NewRGBA(image.Rect(0, 0, width, height))
-	ticker := time.NewTicker(time.Millisecond * 120)
+	ticker := time.NewTicker(time.Millisecond * 1020)
 
 	q := make([]Pair, width*height)
 	for x := range width {
 		for y := range height {
 			q = append(q, Pair{x: x, y: y})
 
-			x1 := (float64(x-512) / float64(200.0*scale)) - offsetX
-			y1 := (float64(y-512) / float64(200.0*scale)) - offsetY
-			init := complex(x1, y1)
-			value[x][y] = init // - complex(-0.10714993602959, -0.91210639328364)
+			dx := float64(x - (width / 2))
+			dy := float64(y - (height / 2))
+
+			x1 := centerX + dx*scaleFactorX
+			y1 := centerY + dy*scaleFactorY
+
+			init := New(x1, y1)
+			value[x][y] = *init // - complex(-0.10714993602959, -0.91210639328364)
 		}
 	}
 
@@ -141,8 +112,11 @@ func main() {
 			exited := false
 			select {
 			case <-ticker.C:
+				// imageLock.Lock()
+				// bImg := GaussianBlur(image, 2)
 				img := canvas.NewImageFromImage(image)
 				w.SetContent(img)
+				// imageLock.Unlock()
 
 			case <-quitCh:
 				exited = true
@@ -161,6 +135,7 @@ func main() {
 				return
 
 			case m := <-workerCompleted:
+				// imageLock.Lock()
 				if explodesAt[m.x][m.y] < 0 {
 					image.Set(m.x, m.y, color.Black)
 				} else {
@@ -168,6 +143,7 @@ func main() {
 					col := spectral_color(float64(300) + div*float64(explodesAt[m.x][m.y]))
 					image.Set(m.x, m.y, col)
 				}
+				// imageLock.Unlock()
 
 				if len(q) == 0 {
 					passCompleted <- true
@@ -185,7 +161,7 @@ func main() {
 			fmt.Println("Iteration", iterations, "started")
 			q = q[:0]
 			q = make([]Pair, width*height)
-			index := 0
+			// index := 0
 			for x := range width {
 				for y := range height {
 					q = append(q, Pair{x: x, y: y})
@@ -194,9 +170,9 @@ func main() {
 
 			go updater()
 
-			for range 100 {
-				go DoProcess(q[index], workerCompleted)
-				index += 1
+			for range 1000 {
+				go DoProcess(q[0], workerCompleted)
+				q = q[1:]
 			}
 
 			<-passCompleted
