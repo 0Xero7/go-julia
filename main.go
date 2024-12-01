@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
+	"github.com/ericlagergren/decimal"
 )
 
 const width = 1024
@@ -16,13 +17,20 @@ const height = 1024
 
 const centerX float64 = -0.6596510985176695 //.75 // -1.04180483110546
 const centerY float64 = -0.3362177249890653 //0.1               // 0.346342664848392
-const scale = 256                           // 128
+const scale = 128
 
 const scaleFactorX = float64(3) / (width * scale)
 const scaleFactorY = float64(3) / (height * scale)
 
 var iterations = 1
-var value [width][height]AComplex
+
+// var value [width][height]AComplex
+
+var zr [width][height]decimal.Big
+var zi [width][height]decimal.Big
+var zr2 [width][height]decimal.Big
+var zi2 [width][height]decimal.Big
+
 var explodesAt [width][height]int
 var maxExplodesAt = 1
 
@@ -49,27 +57,49 @@ func DoProcess(pair Pair, completed chan Message) {
 
 	dx := float64(pair.x - (width / 2))
 	dy := float64(pair.y - (height / 2))
-
 	x := centerX + dx*scaleFactorX
 	y := centerY + dy*scaleFactorY
 
-	// x := (float64(pair.x-(width/2)) / float64(scaleFactorX)) - offsetX
-	// y := (float64(pair.y-(height/2)) / float64(scaleFactorY)) - offsetY
-	z := value[pair.x][pair.y]
-	c := New(x, y)
-
 	for i := range 100 {
-		z = Add(Mul(z, z), *c)
-		if Gt2(z) {
+		z1r := zr2[pair.x][pair.y]
+		z1i := zi2[pair.x][pair.y]
+
+		if CompareDecimal(AddDecimal(z1r, z1i), Dec(4)) == 1 {
 			explodesAt[pair.x][pair.y] = 100*(iterations-1) + i
 			if explodesAt[pair.x][pair.y] > maxExplodesAt {
 				maxExplodesAt = explodesAt[pair.x][pair.y]
 			}
 			break
 		}
+
+		// Calculate next iteration
+		z3i := AddDecimal(MulDecimal(MulDecimal(Dec(2), zr[pair.x][pair.y]), zi[pair.x][pair.y]), Dec(y)) // 2.0*zr*zi + ci
+		z3r := AddDecimal(SubDecimal(zr2[pair.x][pair.y], zi2[pair.x][pair.y]), Dec(x))                   // zr2 - zi2 + cr
+
+		zr[pair.x][pair.y] = z3r
+		zi[pair.x][pair.y] = z3i
+
+		zr2[pair.x][pair.y] = MulDecimal(z3r, z3r)
+		zi2[pair.x][pair.y] = MulDecimal(z3i, z3i)
 	}
 
-	value[pair.x][pair.y] = z
+	// x := (float64(pair.x-(width/2)) / float64(scaleFactorX)) - offsetX
+	// y := (float64(pair.y-(height/2)) / float64(scaleFactorY)) - offsetY
+	// z := value[pair.x][pair.y]
+	// c := New(x, y)
+
+	// for i := range 100 {
+	// 	z = Add(Mul(z, z), *c)
+	// 	if Gt2(z) {
+	// 		explodesAt[pair.x][pair.y] = 100*(iterations-1) + i
+	// 		if explodesAt[pair.x][pair.y] > maxExplodesAt {
+	// 			maxExplodesAt = explodesAt[pair.x][pair.y]
+	// 		}
+	// 		break
+	// 	}
+	// }
+
+	// value[pair.x][pair.y] = z
 
 	completed <- Message{
 		x:        pair.x,
@@ -96,14 +126,14 @@ func main() {
 		for y := range height {
 			q = append(q, Pair{x: x, y: y})
 
-			dx := float64(x - (width / 2))
-			dy := float64(y - (height / 2))
+			// dx := float64(x - (width / 2))
+			// dy := float64(y - (height / 2))
 
-			x1 := centerX + dx*scaleFactorX
-			y1 := centerY + dy*scaleFactorY
+			// x1 := centerX + dx*scaleFactorX
+			// y1 := centerY + dy*scaleFactorY
 
-			init := New(x1, y1)
-			value[x][y] = *init // - complex(-0.10714993602959, -0.91210639328364)
+			// init := New(x1, y1)
+			// value[x][y] = *init // - complex(-0.10714993602959, -0.91210639328364)
 		}
 	}
 
@@ -161,7 +191,6 @@ func main() {
 			fmt.Println("Iteration", iterations, "started")
 			q = q[:0]
 			q = make([]Pair, width*height)
-			// index := 0
 			for x := range width {
 				for y := range height {
 					q = append(q, Pair{x: x, y: y})
@@ -170,7 +199,7 @@ func main() {
 
 			go updater()
 
-			for range 1000 {
+			for range 100 {
 				go DoProcess(q[0], workerCompleted)
 				q = q[1:]
 			}
