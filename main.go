@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,8 +13,8 @@ import (
 	"github.com/ericlagergren/decimal"
 )
 
-const width = 1024
-const height = 1024
+const width = 512
+const height = 512
 
 const centerX float64 = -0.6596510985176695 //.75 // -1.04180483110546
 const centerY float64 = -0.3362177249890653 //0.1               // 0.346342664848392
@@ -83,24 +84,6 @@ func DoProcess(pair Pair, completed chan Message) {
 		zi2[pair.x][pair.y] = MulDecimal(z3i, z3i)
 	}
 
-	// x := (float64(pair.x-(width/2)) / float64(scaleFactorX)) - offsetX
-	// y := (float64(pair.y-(height/2)) / float64(scaleFactorY)) - offsetY
-	// z := value[pair.x][pair.y]
-	// c := New(x, y)
-
-	// for i := range 100 {
-	// 	z = Add(Mul(z, z), *c)
-	// 	if Gt2(z) {
-	// 		explodesAt[pair.x][pair.y] = 100*(iterations-1) + i
-	// 		if explodesAt[pair.x][pair.y] > maxExplodesAt {
-	// 			maxExplodesAt = explodesAt[pair.x][pair.y]
-	// 		}
-	// 		break
-	// 	}
-	// }
-
-	// value[pair.x][pair.y] = z
-
 	completed <- Message{
 		x:        pair.x,
 		y:        pair.y,
@@ -121,21 +104,21 @@ func main() {
 	image := image.NewRGBA(image.Rect(0, 0, width, height))
 	ticker := time.NewTicker(time.Millisecond * 1020)
 
-	q := make([]Pair, width*height)
-	for x := range width {
-		for y := range height {
-			q = append(q, Pair{x: x, y: y})
+	// q := make([]Pair, width*height)
+	// for x := range width {
+	// 	for y := range height {
+	// 		q = append(q, Pair{x: x, y: y})
 
-			// dx := float64(x - (width / 2))
-			// dy := float64(y - (height / 2))
+	// 		// dx := float64(x - (width / 2))
+	// 		// dy := float64(y - (height / 2))
 
-			// x1 := centerX + dx*scaleFactorX
-			// y1 := centerY + dy*scaleFactorY
+	// 		// x1 := centerX + dx*scaleFactorX
+	// 		// y1 := centerY + dy*scaleFactorY
 
-			// init := New(x1, y1)
-			// value[x][y] = *init // - complex(-0.10714993602959, -0.91210639328364)
-		}
-	}
+	// 		// init := New(x1, y1)
+	// 		// value[x][y] = *init // - complex(-0.10714993602959, -0.91210639328364)
+	// 	}
+	// }
 
 	go func() {
 		for {
@@ -158,6 +141,7 @@ func main() {
 		}
 	}()
 
+	index := atomic.Int32{}
 	updater := func() {
 		for {
 			select {
@@ -166,7 +150,7 @@ func main() {
 
 			case m := <-workerCompleted:
 				// imageLock.Lock()
-				if explodesAt[m.x][m.y] < 0 {
+				if explodesAt[m.x][m.y] == 0 {
 					image.Set(m.x, m.y, color.Black)
 				} else {
 					div := float64(300) / float64(maxExplodesAt)
@@ -175,13 +159,21 @@ func main() {
 				}
 				// imageLock.Unlock()
 
-				if len(q) == 0 {
+				if index.Load() == width*height {
 					passCompleted <- true
 					return
 				}
 
-				go DoProcess(q[0], workerCompleted)
-				q = q[1:]
+				_index := index.Load()
+				_x := _index % width
+				_y := _index / width
+				if explodesAt[_x][_y] <= 0 {
+					go DoProcess(Pair{
+						x: int(_x),
+						y: int(_y),
+					}, workerCompleted)
+				}
+				index.Add(1)
 			}
 		}
 	}
@@ -189,28 +181,42 @@ func main() {
 	go func() {
 		for range 30 {
 			fmt.Println("Iteration", iterations, "started")
-			q = q[:0]
-			q = make([]Pair, width*height)
-			for x := range width {
-				for y := range height {
-					q = append(q, Pair{x: x, y: y})
-				}
-			}
+			startTime := time.Now()
+			// q = q[:0]
+			// q = make([]Pair, width*height)
+			// for x := range width {
+			// 	for y := range height {
+			// 		q = append(q, Pair{x: x, y: y})
+			// 	}
+			// }
+
+			index.Store(0)
 
 			go updater()
 
 			for range 100 {
-				go DoProcess(q[0], workerCompleted)
-				q = q[1:]
+				_index := index.Load()
+				_x := _index % width
+				_y := _index / width
+
+				if explodesAt[_x][_y] <= 0 {
+					go DoProcess(Pair{
+						x: int(_x),
+						y: int(_y),
+					}, workerCompleted)
+				}
+				index.Add(1)
 			}
 
 			<-passCompleted
 
-			fmt.Println("Iteration", iterations, "completed successfully")
+			endTime := time.Now()
+			duration := endTime.Sub(startTime).Milliseconds()
+			fmt.Println("Iteration", iterations, "completed successfully in ", duration, " ms")
 			iterations++
 		}
 	}()
 
-	w.Resize(fyne.NewSize(1024, 1024))
+	w.Resize(fyne.NewSize(width, height))
 	w.ShowAndRun()
 }
