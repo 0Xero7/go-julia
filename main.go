@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/png"
+	"log"
+	"math"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -12,19 +16,19 @@ import (
 	"fyne.io/fyne/v2/canvas"
 )
 
-const width = 1024
-const height = 1024
+const width = 1200
+const height = 1200
 
-const centerX float64 = -0.6596510985176695 //.75 // -1.04180483110546
-const centerY float64 = -0.3362177249890653 //0.1               // 0.346342664848392
-const scale = 20480
+const centerX float64 = -0.6596510985176695 //-1.8466284581716412 //-0.6596510985176695 //.75 // -1.04180483110546
+const centerY float64 = -0.3362177249890653 //0                   // 0.441169538038593e-06 //-0.3362177249890653 //0.1               // 0.346342664848392
+const scale = 20480 * 4
 
 const scaleFactorX = float64(3) / (width * scale)
 const scaleFactorY = (float64(3*height) / float64(width)) / (height * scale)
 
 var iterations = 1
 
-const subIterations = 100 * 2
+const subIterations = 4000
 
 // var value [width][height]AComplex
 
@@ -108,7 +112,7 @@ func DoProcess(pair Pair, completed chan Message) {
 
 func main() {
 	a := app.New()
-	w := a.NewWindow("Images")
+	w := a.NewWindow("Mandelbrot")
 
 	// imageLock := sync.Mutex{}
 
@@ -118,6 +122,12 @@ func main() {
 
 	image := image.NewRGBA(image.Rect(0, 0, width, height))
 	ticker := time.NewTicker(time.Millisecond * 1020)
+
+	// color_picker := SpectralColor{}
+	// color_picker := NewHistogram("gradient.png")
+	// color_picker := NewHistogram("By Design.jpg")
+	color_picker := NewHistogram("Evening Night.jpg")
+	totalTime := 0
 
 	go func() {
 		for {
@@ -148,8 +158,10 @@ func main() {
 				if explodesAt[m.x][m.y] == 0 {
 					image.Set(m.x, m.y, color.Black)
 				} else {
-					div := float64(300) / float64(maxExplodesAt)
-					col := spectral_color(float64(300) + div*float64(explodesAt[m.x][m.y]))
+					// div := float64(300) / float64(maxExplodesAt)
+					// col := color_picker.Get(float64(300) + div*float64(explodesAt[m.x][m.y]))
+					fac := math.Log(1+float64(explodesAt[m.x][m.y])) / math.Log(1+float64(maxExplodesAt))
+					col := color_picker.Get(fac) //float64(explodesAt[m.x][m.y]) / float64(maxExplodesAt))
 					image.Set(m.x, m.y, col)
 				}
 
@@ -179,7 +191,7 @@ func main() {
 
 			go updater()
 
-			for range 100 {
+			for range 1000 {
 				_index := index.Load()
 				_x := _index % width
 				_y := _index / width
@@ -195,11 +207,36 @@ func main() {
 
 			endTime := time.Now()
 			duration := endTime.Sub(startTime).Milliseconds()
+			totalTime += int(duration)
+			metric := math.Round(float64(1000*totalTime) / float64(subIterations*iterations))
+			w.SetTitle("Mandelbrot: [" + fmt.Sprint(width, "x", height) + "] " + fmt.Sprint(iterations*subIterations) + " iterations (" + fmt.Sprint(metric) + "ms / 1000 iterations)")
 			fmt.Println("Iteration", iterations, "completed successfully in ", duration, " ms")
 			iterations++
 		}
 	}()
 
+	w.Canvas().SetOnTypedRune(func(r rune) {
+		switch r {
+		case 'q':
+			quitCh <- true
+			return
+
+		case 's':
+			im := image
+
+			f, err := os.Create("mandelbrot.png")
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			if err = png.Encode(f, im); err != nil {
+				log.Println(err)
+			}
+			f.Close()
+		}
+
+	})
 	w.Resize(fyne.NewSize(width, height))
 	w.ShowAndRun()
 }

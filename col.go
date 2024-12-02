@@ -1,8 +1,20 @@
 package main
 
-import "image/color"
+import (
+	"bytes"
+	"image"
+	"image/color"
+	"log"
+	"os"
+)
 
-func spectral_color(l float64) color.RGBA { // RGB <0,1> <- lambda l <400,700> [nm] {
+type ColorOf interface {
+	Get(l float64) color.RGBA
+}
+
+type SpectralColor struct{}
+
+func (c SpectralColor) Get(l float64) color.RGBA {
 	var t float64 = 0
 	var r float64 = 0
 	var g float64 = 0
@@ -45,4 +57,31 @@ func spectral_color(l float64) color.RGBA { // RGB <0,1> <- lambda l <400,700> [
 	}
 
 	return color.RGBA{uint8(255 * r), uint8(255 * g), uint8(255 * b), 255}
+}
+
+type Histogram struct {
+	file  image.Image
+	width int
+}
+
+func NewHistogram(path string) *Histogram {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &Histogram{
+		file:  img,
+		width: img.Bounds().Max.X,
+	}
+}
+
+func (h Histogram) Get(l float64) color.RGBA {
+	r, g, b, a := h.file.At(int(l*float64(h.width)), 0).RGBA()
+	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: uint8(a)}
 }
