@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"log"
 	"math"
+	"math/big"
 	"os"
 	"sync/atomic"
 	"time"
@@ -16,12 +17,12 @@ import (
 	"fyne.io/fyne/v2/canvas"
 )
 
-const width = 1200
-const height = 1200
+const width = 1024
+const height = 1024
 
-const centerX float64 = -0.6596510985176695 //-1.8466284581716412 //-0.6596510985176695 //.75 // -1.04180483110546
+const centerX float64 = -0.6596510987176695 //-1.8466284581716412 //-0.6596510985176695 //.75 // -1.04180483110546
 const centerY float64 = -0.3362177249890653 //0                   // 0.441169538038593e-06 //-0.3362177249890653 //0.1               // 0.346342664848392
-const scale = 20480 * 4
+const scale = 20480 * 800000
 
 const scaleFactorX = float64(3) / (width * scale)
 const scaleFactorY = (float64(3*height) / float64(width)) / (height * scale)
@@ -41,6 +42,11 @@ var fzr [width][height]float64
 var fzi [width][height]float64
 var fzr2 [width][height]float64
 var fzi2 [width][height]float64
+
+var bfzr [width][height]big.Float
+var bfzi [width][height]big.Float
+var bfzr2 [width][height]big.Float
+var bfzi2 [width][height]big.Float
 
 var explodesAt [width][height]int
 var maxExplodesAt = 1
@@ -121,7 +127,7 @@ func main() {
 	passCompleted := make(chan bool)
 
 	image := image.NewRGBA(image.Rect(0, 0, width, height))
-	ticker := time.NewTicker(time.Millisecond * 1020)
+	ticker := time.NewTicker(time.Millisecond * 128)
 
 	// color_picker := SpectralColor{}
 	// color_picker := NewHistogram("gradient.png")
@@ -134,8 +140,8 @@ func main() {
 			exited := false
 			select {
 			case <-ticker.C:
-				img := canvas.NewImageFromImage(image)
-				w.SetContent(img)
+				// img := canvas.NewImageFromImage(image)
+				// w.SetContent(img)
 
 			case <-quitCh:
 				exited = true
@@ -171,12 +177,13 @@ func main() {
 				}
 
 				_index := index.Load()
-				_x := _index % width
-				_y := _index / width
-				go DoProcess(Pair{
-					x: int(_x),
-					y: int(_y),
-				}, workerCompleted)
+				// _x := _index % width
+				// _y := _index / width
+				go DoProcess(HilbertPoint(int(_index), height, width), workerCompleted)
+				// go DoProcess(Pair{
+				// 	x: int(_x),
+				// 	y: int(_y),
+				// }, workerCompleted)
 				index.Add(1)
 			}
 		}
@@ -193,13 +200,14 @@ func main() {
 
 			for range 1000 {
 				_index := index.Load()
-				_x := _index % width
-				_y := _index / width
+				// _x := _index % width
+				// _y := _index / width
 
-				go DoProcess(Pair{
-					x: int(_x),
-					y: int(_y),
-				}, workerCompleted)
+				go DoProcess(HilbertPoint(int(_index), height, width), workerCompleted)
+				// go DoProcess(Pair{
+				// 	x: int(_x),
+				// 	y: int(_y),
+				// }, workerCompleted)
 				index.Add(1)
 			}
 
@@ -210,6 +218,10 @@ func main() {
 			totalTime += int(duration)
 			metric := math.Round(float64(1000*totalTime) / float64(subIterations*iterations))
 			w.SetTitle("Mandelbrot: [" + fmt.Sprint(width, "x", height) + "] " + fmt.Sprint(iterations*subIterations) + " iterations (" + fmt.Sprint(metric) + "ms / 1000 iterations)")
+
+			img := canvas.NewImageFromImage(image)
+			w.SetContent(img)
+
 			fmt.Println("Iteration", iterations, "completed successfully in ", duration, " ms")
 			iterations++
 		}
