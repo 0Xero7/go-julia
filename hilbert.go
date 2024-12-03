@@ -40,5 +40,5 @@ func HilbertPoint(i, m, n int) Pair {
 		y = m - 1
 	}
 
-	return Pair{x: x, y: y}
+	return Pair{x: int32(x), y: int32(y)}
 }
