@@ -1,29 +1,14 @@
 package main
 
-type HilbertCurveSampler struct {
-	samplePoint []Pair
-}
+type UnCachedHilbertCurveSampler struct{}
 
-func NewHilbertCurveSampler(n, m int) *HilbertCurveSampler {
-	hc := &HilbertCurveSampler{
-		samplePoint: make([]Pair, n*m),
-	}
-
-	// Initialize Hilbert curve points
-	for i := range n * m {
-		hc.samplePoint[i] = hc.Sample2(i, n, m)
-	}
-
-	return hc
-}
-
-func (h *HilbertCurveSampler) Sample(i, n, m int) Pair {
-	return h.samplePoint[i]
+func (h *UnCachedHilbertCurveSampler) Sample(i, n, m int) Pair {
+	return h.Sample2(i, n, m)
 }
 
 // HilbertPoint returns the i-th point in the Hilbert curve
 // for a 2D space of size n x Samplem
-func (h *HilbertCurveSampler) Sample2(i, n, m int) Pair {
+func (h *UnCachedHilbertCurveSampler) Sample2(i, n, m int) Pair {
 	// Find the smallest power of 2 that covers both dimensions
 	size := 1
 	for size < m || size < n {
