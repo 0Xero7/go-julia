@@ -51,17 +51,6 @@ var bfzi2 [width][height]big.Float
 var explodesAt [width][height]int
 var maxExplodesAt = 1
 
-type Pair struct {
-	x int
-	y int
-}
-
-type Message struct {
-	x        int
-	y        int
-	explodes int
-}
-
 func DoProcess(pair Pair, completed chan Message) {
 	if explodesAt[pair.x][pair.y] > 0 {
 		completed <- Message{
@@ -140,8 +129,8 @@ func main() {
 			exited := false
 			select {
 			case <-ticker.C:
-				// img := canvas.NewImageFromImage(image)
-				// w.SetContent(img)
+				img := canvas.NewImageFromImage(image)
+				w.SetContent(img)
 
 			case <-quitCh:
 				exited = true
@@ -162,13 +151,13 @@ func main() {
 
 			case m := <-workerCompleted:
 				if explodesAt[m.x][m.y] == 0 {
-					image.Set(m.x, m.y, color.Black)
+					image.Set(int(m.x), int(m.y), color.Black)
 				} else {
 					// div := float64(300) / float64(maxExplodesAt)
 					// col := color_picker.Get(float64(300) + div*float64(explodesAt[m.x][m.y]))
 					fac := math.Log(1+float64(explodesAt[m.x][m.y])) / math.Log(1+float64(maxExplodesAt))
 					col := color_picker.Get(fac) //float64(explodesAt[m.x][m.y]) / float64(maxExplodesAt))
-					image.Set(m.x, m.y, col)
+					image.Set(int(m.x), int(m.y), col)
 				}
 
 				if index.Load() == width*height {
