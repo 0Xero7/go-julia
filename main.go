@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
 	"log"
 	"math"
@@ -16,65 +16,139 @@ import (
 	"github.com/alitto/pond/v2"
 )
 
-func updateImage(img *image.RGBA, px, py int, colorRange ColorRangeConverer, colorPicker ColorOf, engine Engine) {
-	explodesAt := engine.GetExplodesAt(int32(px), int32(py))
-	if explodesAt == 0 {
-		img.Set(int(px), int(py), color.Black)
-	} else {
-		// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
-		fac := colorRange.Get(float64(explodesAt), float64(engine.GetMaxExplodesAt()))
-		col := colorPicker.Get(fac)
-		img.Set(int(px), int(py), col)
+type cliParams struct {
+	width, height          int
+	chunkSizeX, chunkSizeY int
+	centerX, centerY       float64
+	scale                  int
+	subiterations          int
+	iterations             int
+	sampler                string
+	colorOf                string
+	colorGradientPath      string
+}
+
+func verify(params cliParams) {
+	if params.width <= 0 || params.height <= 0 {
+		log.Fatal("Width and height must be positive integers")
+	}
+
+	if (params.width&(params.width-1) != 0) || (params.height&(params.height-1) != 0) {
+		log.Fatal("Width and height must be powers of two")
+	}
+
+	if params.chunkSizeX <= 0 || params.chunkSizeY <= 0 {
+		log.Fatal("Chunk size X and Y must be positive integers")
+	}
+
+	if (params.chunkSizeX&(params.chunkSizeX-1) != 0) || (params.chunkSizeY&(params.chunkSizeY-1) != 0) {
+		log.Fatal("Width and height must be powers of two")
+	}
+
+	if params.scale <= 0 {
+		log.Fatal("Scale must be a positive integer")
+	}
+
+	if params.subiterations <= 0 || params.iterations <= 0 {
+		log.Fatal("Sub-iterations and iterations must be positive integers")
+	}
+
+	if params.sampler != "linear" && params.sampler != "hilbert" {
+		log.Fatalf("Invalid sampler: %s. Supported samplers are linear and hilbert", params.sampler)
+	}
+
+	if params.colorOf != "spectral" && params.colorOf != "gradient" {
+		log.Fatalf("Invalid color pickers: %s. Supported color pickers are spectral and gradient", params.sampler)
+	}
+
+	if params.colorGradientPath == "" && params.colorOf == "gradient" {
+		log.Fatal("Gradient color picker requires a valid gradient image path")
 	}
 }
 
 func main() {
+	params := cliParams{}
+	flag.IntVar(&params.width, "width", 1024, "width of the image")
+	flag.IntVar(&params.height, "height", 1024, "height of the image")
+	flag.IntVar(&params.chunkSizeX, "chunkX", 256, "chunk size in X direction")
+	flag.IntVar(&params.chunkSizeY, "chunkY", 256, "chunk size in Y direction")
+	flag.Float64Var(&params.centerX, "x", -0.75, "center offset X")
+	flag.Float64Var(&params.centerY, "y", 0, "center offset Y")
+	flag.IntVar(&params.scale, "scale", 1, "zoom level")
+	flag.IntVar(&params.subiterations, "subit", 200, "sub-iterations per chunk")
+	flag.IntVar(&params.iterations, "it", 10, "max iterations")
+	flag.StringVar(&params.sampler, "sampler", "linear", "which sampler to use (linear/hilbert)")
+	flag.StringVar(&params.colorOf, "color", "spectral", "which color picker to use (spectral/gradient)")
+	flag.StringVar(&params.colorGradientPath, "path", ".", "if gradient color picker, the path of the image from which to sample the colors")
+	flag.Parse()
+
+	verify(params)
+
+	// Idk why
+	params.centerX -= 1.5 / float64(params.scale)
+	params.centerY -= 1.5 / float64(params.scale)
+
 	a := app.New()
 	w := a.NewWindow("Mandelbrot")
 
-	const width = 1024
-	const height = 1024
+	var width = params.width
+	var height = params.height
 
 	quitCh := make(chan bool)
 
 	image := image.NewRGBA(image.Rect(0, 0, width, height))
 	ticker := time.NewTicker(time.Millisecond * 128)
 
-	chunkSizeX, chunkSizeY := 256, 256
+	chunkSizeX, chunkSizeY := params.chunkSizeX, params.chunkSizeY
 	// S := 1.1
 	// COLOR_STEPS := 20
 
 	engine := NewFastFloatEngine(FastFloatEngineParams{
 		Width:   width,
 		Height:  height,
-		CenterX: Ptr(0.07318231460617092),
-		CenterY: Ptr(0.6137973663828865),
+		CenterX: &params.centerX, //Ptr(0.07318231460617092),
+		CenterY: &params.centerY, //Ptr(0.6137973663828865),
 		// CenterX: Ptr(0.3290059999116987),
 		// CenterY: Ptr(0.5184159787873756),
-		Scale: Ptr(14586006),
+		Scale: &params.scale, //Ptr(14586006),
 		// Scale:         Ptr(49259936850),
-		SubIterations: Ptr(500),
-		ChunkSizeX:    Ptr(chunkSizeX),
-		ChunkSizeY:    Ptr(chunkSizeY),
+		SubIterations: &params.subiterations, //Ptr(500),
+		ChunkSizeX:    &params.chunkSizeX,    //Ptr(chunkSizeX),
+		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
 	})
 
 	// sampler := UnCachedHilbertCurveSampler{
 	// 	n: height / chunkSizeX,
 	// 	m: width / chunkSizeY,
 	// }
-	sampler := LinearSampler{
-		n: height / chunkSizeY,
-		m: width / chunkSizeX,
+
+	var sampler Sampler
+	if params.sampler == "linear" {
+		sampler = LinearSampler{
+			n: height / chunkSizeY,
+			m: width / chunkSizeX,
+		}
+	} else if params.sampler == "hilbert" {
+		sampler = UnCachedHilbertCurveSampler{
+			n: height / chunkSizeX,
+			m: width / chunkSizeY,
+		}
 	}
-	// sampler := *NewHilbertCurveSampler(height, width)
+	// sampler := NewHilbertCurveSampler(height, width)
 
 	color_converter := ExponentialMappedModuloColorRangeConverer{
 		S:     1.1,
 		Steps: 20,
 	}
 
+	var color_picker ColorOf
+	if params.colorOf == "spectral" {
+		color_picker = SpectralColor{}
+	} else if params.colorOf == "gradient" {
+		color_picker = NewHistogram(params.colorGradientPath)
+	}
 	// color_picker := SpectralColor{}
-	color_picker := NewHistogram("gradient.png")
+	// color_picker := NewHistogram("gradient.png")
 	// color_picker := NewHistogram("Behongo.jpg")
 	// color_picker := NewHistogram("Grade Grey.jpg")
 	// color_picker := NewHistogram("Evening Night.jpg")
@@ -148,7 +222,7 @@ func main() {
 	}
 
 	go func() {
-		for iterations := range 30 {
+		for iterations := range params.iterations {
 			iterate(iterations)
 		}
 
@@ -180,6 +254,6 @@ func main() {
 		}
 
 	})
-	w.Resize(fyne.NewSize(width, height))
+	w.Resize(fyne.NewSize(float32(width), float32(height)))
 	w.ShowAndRun()
 }

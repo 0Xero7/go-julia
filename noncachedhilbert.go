@@ -4,13 +4,13 @@ type UnCachedHilbertCurveSampler struct {
 	n, m int
 }
 
-func (h *UnCachedHilbertCurveSampler) Sample(i int) Pair {
+func (h UnCachedHilbertCurveSampler) Sample(i int) Pair {
 	return h.Sample2(i)
 }
 
 // HilbertPoint returns the i-th point in the Hilbert curve
 // for a 2D space of size n x Samplem
-func (h *UnCachedHilbertCurveSampler) Sample2(i int) Pair {
+func (h UnCachedHilbertCurveSampler) Sample2(i int) Pair {
 	// Find the smallest power of 2 that covers both dimensions
 	size := 1
 	for size < h.m || size < h.n {

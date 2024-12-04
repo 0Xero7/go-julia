@@ -18,7 +18,7 @@ type SpectralColor struct{}
 func (c SpectralColor) Get(arg float64) color.RGBA {
 	l := 400 + (300)*arg
 
-	var t float64 = 0
+	var t float64
 	var r float64 = 0
 	var g float64 = 0
 	var b float64 = 0
