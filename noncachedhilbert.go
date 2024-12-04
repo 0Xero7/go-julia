@@ -1,17 +1,19 @@
 package main
 
-type UnCachedHilbertCurveSampler struct{}
+type UnCachedHilbertCurveSampler struct {
+	n, m int
+}
 
-func (h *UnCachedHilbertCurveSampler) Sample(i, n, m int) Pair {
-	return h.Sample2(i, n, m)
+func (h *UnCachedHilbertCurveSampler) Sample(i int) Pair {
+	return h.Sample2(i)
 }
 
 // HilbertPoint returns the i-th point in the Hilbert curve
 // for a 2D space of size n x Samplem
-func (h *UnCachedHilbertCurveSampler) Sample2(i, n, m int) Pair {
+func (h *UnCachedHilbertCurveSampler) Sample2(i int) Pair {
 	// Find the smallest power of 2 that covers both dimensions
 	size := 1
-	for size < m || size < n {
+	for size < h.m || size < h.n {
 		size *= 2
 	}
 
@@ -39,11 +41,11 @@ func (h *UnCachedHilbertCurveSampler) Sample2(i, n, m int) Pair {
 	}
 
 	// Ensure the point is within bounds
-	if x >= m {
-		x = m - 1
+	if x >= h.m {
+		x = h.m - 1
 	}
-	if y >= n {
-		y = n - 1
+	if y >= h.n {
+		y = h.n - 1
 	}
 
 	return Pair{x: int32(x), y: int32(y)}

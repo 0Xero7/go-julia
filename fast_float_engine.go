@@ -1,13 +1,16 @@
 package main
 
+import "sync"
+
 type FastFloatEngine struct {
-	fzr           [][]float64
-	fzi           [][]float64
-	fzr2          [][]float64
-	fzi2          [][]float64
-	explodesAt    [][]int
+	fzr           [][][][]float64
+	fzi           [][][][]float64
+	fzr2          [][][][]float64
+	fzi2          [][][][]float64
+	explodesAt    [][][][]int
 	maxExplodesAt int
 
+	width, height              int
 	scale                      int
 	scaleFactorX, scaleFactorY float64
 
@@ -15,83 +18,99 @@ type FastFloatEngine struct {
 
 	subIterations int
 
+	chunkSizeX, chunkSizeY int
+
 	iterations int
+
+	lock sync.RWMutex
 }
 
 type FastFloatEngineParams struct {
-	Width, Height    int
-	CenterX, CenterY *float64
-	Scale            *int
-	SubIterations    *int
+	Width, Height          int
+	CenterX, CenterY       *float64
+	Scale                  *int
+	SubIterations          *int
+	ChunkSizeX, ChunkSizeY *int
 }
 
 func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 	engine := FastFloatEngine{
-		fzr:           Create2D[float64](height, width),
-		fzi:           Create2D[float64](height, width),
-		fzr2:          Create2D[float64](height, width),
-		fzi2:          Create2D[float64](height, width),
-		explodesAt:    Create2D[int](height, width),
+		fzr:           Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
+		fzi:           Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
+		fzr2:          Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
+		fzi2:          Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
+		explodesAt:    Create4D[int](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
 		maxExplodesAt: 1,
 		scale:         Elvis(params.Scale, 1),
-		scaleFactorX:  float64(3) / float64(width*Elvis(params.Scale, 1)),
-		scaleFactorY:  (float64(3*height) / float64(width)) / float64(width*Elvis(params.Scale, 1)),
+		scaleFactorX:  float64(3) / float64(params.Width*Elvis(params.Scale, 1)),
+		scaleFactorY:  (float64(3*params.Height) / float64(params.Width)) / float64(params.Width*Elvis(params.Scale, 1)),
 		centerX:       Elvis(params.CenterX, 0.75),
 		centerY:       Elvis(params.CenterY, 0),
 		subIterations: Elvis(params.SubIterations, 100),
 		iterations:    1,
+		chunkSizeX:    Elvis(params.ChunkSizeX, 1),
+		chunkSizeY:    Elvis(params.ChunkSizeY, 1),
+		lock:          sync.RWMutex{},
 	}
 
 	return &engine
 }
 
-func (f *FastFloatEngine) Perform(pair Pair, completed chan Message) {
-	if f.explodesAt[pair.x][pair.y] > 0 {
-		completed <- Message{
-			x:        pair.x,
-			y:        pair.y,
-			explodes: f.explodesAt[pair.x][pair.y],
-		}
-		return
-	}
+func (f *FastFloatEngine) Perform(x, y int32) {
+	X := x * int32(f.chunkSizeX)
+	Y := y * int32(f.chunkSizeY)
 
-	dx := float64(pair.x - (width / 2))
-	dy := float64(pair.y - (height / 2))
-	x := f.centerX + dx*f.scaleFactorX
-	y := f.centerY + dy*f.scaleFactorY
+	for _x := 0; _x < f.chunkSizeX; _x++ {
+		for _y := 0; _y < f.chunkSizeY; _y++ {
+			XX := X + int32(_x)
+			YY := Y + int32(_y)
 
-	for i := range f.subIterations {
-		z1r := f.fzr2[pair.x][pair.y]
-		z1i := f.fzi2[pair.x][pair.y]
-
-		if z1r+z1i > 4 {
-			f.explodesAt[pair.x][pair.y] = f.iterations + i
-			if f.explodesAt[pair.x][pair.y] > f.maxExplodesAt {
-				f.maxExplodesAt = f.explodesAt[pair.x][pair.y]
+			if f.explodesAt[x][y][_x][_y] > 0 {
+				continue
 			}
-			break
+
+			dXX := float64(XX - int32(f.width/2))
+			dYY := float64(YY - int32(f.height/2))
+			_XX := f.centerX + dXX*f.scaleFactorX
+			_YY := f.centerY + dYY*f.scaleFactorY
+
+			for i := range f.subIterations {
+				z1r := f.fzr2[x][y][_x][_y]
+				z1i := f.fzi2[x][y][_x][_y]
+
+				if z1r+z1i > 4 {
+					f.lock.Lock()
+					f.explodesAt[x][y][_x][_y] = f.iterations + i
+					if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
+						f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
+					}
+					f.lock.Unlock()
+					break
+				}
+
+				z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
+				z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
+
+				f.fzr[x][y][_x][_y] = z3r
+				f.fzi[x][y][_x][_y] = z3i
+
+				f.fzr2[x][y][_x][_y] = z3r * z3r
+				f.fzi2[x][y][_x][_y] = z3i * z3i
+			}
 		}
-
-		z3i := float64(2)*f.fzr[pair.x][pair.y]*f.fzi[pair.x][pair.y] + y
-		z3r := f.fzr2[pair.x][pair.y] - f.fzi2[pair.x][pair.y] + x
-
-		f.fzr[pair.x][pair.y] = z3r
-		f.fzi[pair.x][pair.y] = z3i
-
-		f.fzr2[pair.x][pair.y] = z3r * z3r
-		f.fzi2[pair.x][pair.y] = z3i * z3i
-
-	}
-
-	completed <- Message{
-		x:        pair.x,
-		y:        pair.y,
-		explodes: f.explodesAt[pair.x][pair.y],
 	}
 }
 
-func (f *FastFloatEngine) GetExplodesAt(pair Pair) int {
-	return f.explodesAt[pair.x][pair.y]
+func (f *FastFloatEngine) GetExplodesAt(x, y int32) int {
+	f.lock.RLock()
+	xx := x / int32(f.chunkSizeX)
+	xy := x % int32(f.chunkSizeX)
+	yx := y / int32(f.chunkSizeY)
+	yy := y % int32(f.chunkSizeY)
+
+	ans := f.explodesAt[xx][yx][xy][yy]
+	f.lock.RUnlock()
+	return ans
 }
 
 func (f *FastFloatEngine) GetMaxExplodesAt() int {

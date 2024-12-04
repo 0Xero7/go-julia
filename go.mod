@@ -2,11 +2,14 @@ module julia
 
 go 1.23.3
 
+require fyne.io/fyne v1.4.3
+
 require (
-	fyne.io/fyne v1.4.3
 	fyne.io/fyne/v2 v2.5.2 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/alitto/pond v1.9.2 // indirect
+	github.com/alitto/pond/v2 v2.1.5 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ericlagergren/decimal v0.0.0-20240411145413-00de7ca16731 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect

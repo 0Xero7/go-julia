@@ -6,7 +6,8 @@ type Pair struct {
 }
 
 type Message struct {
-	x        int32
-	y        int32
-	explodes int
+	chunkCompleted bool
+	x              int32
+	y              int32
+	explodesAt     [][]int
 }
