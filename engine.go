@@ -1,6 +1,7 @@
 package main
 
 type Engine interface {
-	Perform(x, y int32, message chan Message)
-	GetExplodesAt(x, y int32)
+	Perform(x, y int32)
+	GetExplodesAt(x, y int32) int
+	GetMaxExplodesAt() int
 }

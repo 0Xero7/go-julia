@@ -16,6 +16,18 @@ import (
 	"github.com/alitto/pond/v2"
 )
 
+func updateImage(img *image.RGBA, px, py int, colorRange ColorRangeConverer, colorPicker ColorOf, engine Engine) {
+	explodesAt := engine.GetExplodesAt(int32(px), int32(py))
+	if explodesAt == 0 {
+		img.Set(int(px), int(py), color.Black)
+	} else {
+		// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
+		fac := colorRange.Get(float64(explodesAt), float64(engine.GetMaxExplodesAt()))
+		col := colorPicker.Get(fac)
+		img.Set(int(px), int(py), col)
+	}
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("Mandelbrot")
@@ -29,8 +41,8 @@ func main() {
 	ticker := time.NewTicker(time.Millisecond * 128)
 
 	chunkSizeX, chunkSizeY := 256, 256
-	S := 1.1
-	COLOR_STEPS := 20
+	// S := 1.1
+	// COLOR_STEPS := 20
 
 	engine := NewFastFloatEngine(FastFloatEngineParams{
 		Width:   width,
@@ -55,6 +67,11 @@ func main() {
 		m: width / chunkSizeX,
 	}
 	// sampler := *NewHilbertCurveSampler(height, width)
+
+	color_converter := ExponentialMappedModuloColorRangeConverer{
+		S:     1.1,
+		Steps: 20,
+	}
 
 	// color_picker := SpectralColor{}
 	color_picker := NewHistogram("gradient.png")
@@ -102,15 +119,7 @@ func main() {
 						px := X + x
 						py := Y + y
 
-						explodesAt := engine.GetExplodesAt(int32(px), int32(py))
-						if explodesAt == 0 {
-							image.Set(int(px), int(py), color.Black)
-						} else {
-							// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
-							fac := math.Mod(math.Pow(math.Pow(float64(explodesAt)/float64(engine.GetMaxExplodesAt()), float64(S))*float64(COLOR_STEPS), 1.5), float64(COLOR_STEPS)) / float64(COLOR_STEPS)
-							col := color_picker.Get(fac)
-							image.Set(int(px), int(py), col)
-						}
+						updateImage(image, px, py, color_converter, color_picker, engine)
 					}
 				}
 			})
@@ -121,15 +130,8 @@ func main() {
 			for i := range height {
 				px := j
 				py := i
-				explodesAt := engine.GetExplodesAt(int32(px), int32(py))
-				if explodesAt == 0 {
-					image.Set(int(px), int(py), color.Black)
-				} else {
-					// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
-					fac := math.Mod(math.Pow(math.Pow(float64(explodesAt)/float64(engine.GetMaxExplodesAt()), float64(S))*float64(COLOR_STEPS), 1.5), float64(COLOR_STEPS)) / float64(COLOR_STEPS)
-					col := color_picker.Get(fac)
-					image.Set(int(px), int(py), col)
-				}
+
+				updateImage(image, px, py, color_converter, color_picker, engine)
 			}
 		}
 

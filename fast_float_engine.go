@@ -104,7 +104,7 @@ func (f *FastFloatEngine) GetExplodesAt(x, y int32) int {
 	return ans
 }
 
-func (f *FastFloatEngine) GetMaxExplodesAt() int {
+func (f FastFloatEngine) GetMaxExplodesAt() int {
 	return f.maxExplodesAt
 }
 

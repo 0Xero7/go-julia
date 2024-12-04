@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"log"
+	"math"
 	"os"
 )
 
@@ -86,4 +87,17 @@ func NewHistogram(path string) *Histogram {
 func (h Histogram) Get(l float64) color.RGBA {
 	r, g, b, a := h.file.At(int(l*float64(h.width)), 0).RGBA()
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: uint8(a)}
+}
+
+type ColorRangeConverer interface {
+	Get(l, r float64) float64
+}
+
+type ExponentialMappedModuloColorRangeConverer struct {
+	S     float64
+	Steps int
+}
+
+func (c ExponentialMappedModuloColorRangeConverer) Get(l, h float64) float64 {
+	return math.Mod(math.Pow(math.Pow(float64(l)/float64(h), float64(c.S))*float64(c.Steps), 1.5), float64(c.Steps)) / float64(c.Steps)
 }
