@@ -14,7 +14,9 @@ type ColorOf interface {
 
 type SpectralColor struct{}
 
-func (c SpectralColor) Get(l float64) color.RGBA {
+func (c SpectralColor) Get(arg float64) color.RGBA {
+	l := 400 + (300)*arg
+
 	var t float64 = 0
 	var r float64 = 0
 	var g float64 = 0

@@ -29,17 +29,19 @@ func main() {
 	ticker := time.NewTicker(time.Millisecond * 128)
 
 	chunkSizeX, chunkSizeY := 256, 256
+	S := 1.1
+	COLOR_STEPS := 20
 
 	engine := NewFastFloatEngine(FastFloatEngineParams{
-		Width:  width,
-		Height: height,
-		// CenterX: Ptr(0.07318231460617092),
-		// CenterY: Ptr(0.6137973663828865),
-		CenterX: Ptr(0.3290059999116987),
-		CenterY: Ptr(0.5184159787873756),
-		Scale:   Ptr(14586006),
+		Width:   width,
+		Height:  height,
+		CenterX: Ptr(0.07318231460617092),
+		CenterY: Ptr(0.6137973663828865),
+		// CenterX: Ptr(0.3290059999116987),
+		// CenterY: Ptr(0.5184159787873756),
+		Scale: Ptr(14586006),
 		// Scale:         Ptr(49259936850),
-		SubIterations: Ptr(80),
+		SubIterations: Ptr(500),
 		ChunkSizeX:    Ptr(chunkSizeX),
 		ChunkSizeY:    Ptr(chunkSizeY),
 	})
@@ -104,7 +106,8 @@ func main() {
 						if explodesAt == 0 {
 							image.Set(int(px), int(py), color.Black)
 						} else {
-							fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
+							// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
+							fac := math.Mod(math.Pow(math.Pow(float64(explodesAt)/float64(engine.GetMaxExplodesAt()), float64(S))*float64(COLOR_STEPS), 1.5), float64(COLOR_STEPS)) / float64(COLOR_STEPS)
 							col := color_picker.Get(fac)
 							image.Set(int(px), int(py), col)
 						}
@@ -122,7 +125,8 @@ func main() {
 				if explodesAt == 0 {
 					image.Set(int(px), int(py), color.Black)
 				} else {
-					fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
+					// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))
+					fac := math.Mod(math.Pow(math.Pow(float64(explodesAt)/float64(engine.GetMaxExplodesAt()), float64(S))*float64(COLOR_STEPS), 1.5), float64(COLOR_STEPS)) / float64(COLOR_STEPS)
 					col := color_picker.Get(fac)
 					image.Set(int(px), int(py), col)
 				}
