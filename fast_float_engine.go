@@ -1,7 +1,5 @@
 package main
 
-import "sync"
-
 type FastFloatEngine struct {
 	fzr           [][][][]float64
 	fzi           [][][][]float64
@@ -21,8 +19,6 @@ type FastFloatEngine struct {
 	chunkSizeX, chunkSizeY int
 
 	iterations int
-
-	lock sync.RWMutex
 }
 
 type FastFloatEngineParams struct {
@@ -50,7 +46,6 @@ func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 		iterations:    1,
 		chunkSizeX:    Elvis(params.ChunkSizeX, 1),
 		chunkSizeY:    Elvis(params.ChunkSizeY, 1),
-		lock:          sync.RWMutex{},
 	}
 
 	return &engine
@@ -79,12 +74,10 @@ func (f *FastFloatEngine) Perform(x, y int32) {
 				z1i := f.fzi2[x][y][_x][_y]
 
 				if z1r+z1i > 4 {
-					f.lock.Lock()
 					f.explodesAt[x][y][_x][_y] = f.iterations + i
 					if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
 						f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
 					}
-					f.lock.Unlock()
 					break
 				}
 
@@ -102,14 +95,12 @@ func (f *FastFloatEngine) Perform(x, y int32) {
 }
 
 func (f *FastFloatEngine) GetExplodesAt(x, y int32) int {
-	f.lock.RLock()
 	xx := x / int32(f.chunkSizeX)
 	xy := x % int32(f.chunkSizeX)
 	yx := y / int32(f.chunkSizeY)
 	yy := y % int32(f.chunkSizeY)
 
 	ans := f.explodesAt[xx][yx][xy][yy]
-	f.lock.RUnlock()
 	return ans
 }
 

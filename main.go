@@ -170,7 +170,7 @@ func main() {
 			f.Close()
 
 		case '+':
-			iterate(31)
+			iterate(engine.GetIterations() + 1)
 		}
 
 	})
