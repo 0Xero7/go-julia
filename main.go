@@ -8,6 +8,8 @@ import (
 	"log"
 	"math"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -53,8 +55,8 @@ func verify(params cliParams) {
 		log.Fatal("Sub-iterations and iterations must be positive integers")
 	}
 
-	if params.sampler != "linear" && params.sampler != "hilbert" {
-		log.Fatalf("Invalid sampler: %s. Supported samplers are linear and hilbert", params.sampler)
+	if !slices.Contains([]string{"linear", "hilbert", "cachedhilbert"}, params.sampler) {
+		log.Fatalf("Invalid sampler: %s. Supported samplers are %s", params.sampler, strings.Join([]string{"linear", "hilbert", "cachedhilbert"}, ","))
 	}
 
 	if params.colorOf != "spectral" && params.colorOf != "gradient" {
@@ -100,8 +102,6 @@ func main() {
 	ticker := time.NewTicker(time.Millisecond * 128)
 
 	chunkSizeX, chunkSizeY := params.chunkSizeX, params.chunkSizeY
-	// S := 1.1
-	// COLOR_STEPS := 20
 
 	engine := NewFastFloatEngine(FastFloatEngineParams{
 		Width:   width,
@@ -117,11 +117,6 @@ func main() {
 		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
 	})
 
-	// sampler := UnCachedHilbertCurveSampler{
-	// 	n: height / chunkSizeX,
-	// 	m: width / chunkSizeY,
-	// }
-
 	var sampler Sampler
 	if params.sampler == "linear" {
 		sampler = LinearSampler{
@@ -133,8 +128,9 @@ func main() {
 			n: height / chunkSizeX,
 			m: width / chunkSizeY,
 		}
+	} else if params.sampler == "cachedhilbert" {
+		sampler = NewHilbertCurveSampler(height, width)
 	}
-	// sampler := NewHilbertCurveSampler(height, width)
 
 	color_converter := ExponentialMappedModuloColorRangeConverer{
 		S:     1.1,
@@ -147,11 +143,7 @@ func main() {
 	} else if params.colorOf == "gradient" {
 		color_picker = NewHistogram(params.colorGradientPath)
 	}
-	// color_picker := SpectralColor{}
-	// color_picker := NewHistogram("gradient.png")
-	// color_picker := NewHistogram("Behongo.jpg")
-	// color_picker := NewHistogram("Grade Grey.jpg")
-	// color_picker := NewHistogram("Evening Night.jpg")
+
 	totalTime := 0
 
 	go func() {

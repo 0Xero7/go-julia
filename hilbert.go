@@ -1,12 +1,15 @@
 package main
 
 type HilbertCurveSampler struct {
+	n, m        int
 	samplePoint []Pair
 }
 
 func NewHilbertCurveSampler(n, m int) *HilbertCurveSampler {
 	hc := &HilbertCurveSampler{
 		samplePoint: make([]Pair, n*m),
+		n:           n,
+		m:           m,
 	}
 
 	// Initialize Hilbert curve points
@@ -17,7 +20,7 @@ func NewHilbertCurveSampler(n, m int) *HilbertCurveSampler {
 	return hc
 }
 
-func (h *HilbertCurveSampler) Sample(i, n, m int) Pair {
+func (h *HilbertCurveSampler) Sample(i int) Pair {
 	return h.samplePoint[i]
 }
 
