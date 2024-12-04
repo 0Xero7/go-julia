@@ -1,7 +1,9 @@
 package main
 
+import "context"
+
 type Engine interface {
-	Perform(x, y int32)
+	Perform(context context.Context, x, y int32)
 	GetExplodesAt(x, y int32) int
 	GetMaxExplodesAt() int
 }

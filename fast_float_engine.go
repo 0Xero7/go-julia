@@ -1,5 +1,7 @@
 package main
 
+import "context"
+
 type FastFloatEngine struct {
 	fzr           [][][][]float64
 	fzi           [][][][]float64
@@ -51,44 +53,50 @@ func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 	return &engine
 }
 
-func (f *FastFloatEngine) Perform(x, y int32) {
+func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 	X := x * int32(f.chunkSizeX)
 	Y := y * int32(f.chunkSizeY)
 
 	for _x := 0; _x < f.chunkSizeX; _x++ {
 		for _y := 0; _y < f.chunkSizeY; _y++ {
-			XX := X + int32(_x)
-			YY := Y + int32(_y)
+			select {
+			case <-context.Done():
+				return
 
-			if f.explodesAt[x][y][_x][_y] > 0 {
-				continue
-			}
+			default:
+				XX := X + int32(_x)
+				YY := Y + int32(_y)
 
-			dXX := float64(XX - int32(f.width/2))
-			dYY := float64(YY - int32(f.height/2))
-			_XX := f.centerX + dXX*f.scaleFactorX
-			_YY := f.centerY + dYY*f.scaleFactorY
-
-			for i := range f.subIterations {
-				z1r := f.fzr2[x][y][_x][_y]
-				z1i := f.fzi2[x][y][_x][_y]
-
-				if z1r+z1i > 4 {
-					f.explodesAt[x][y][_x][_y] = f.iterations + i
-					if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
-						f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
-					}
-					break
+				if f.explodesAt[x][y][_x][_y] > 0 {
+					continue
 				}
 
-				z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
-				z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
+				dXX := float64(XX - int32(f.width/2))
+				dYY := float64(YY - int32(f.height/2))
+				_XX := f.centerX + dXX*f.scaleFactorX
+				_YY := f.centerY + dYY*f.scaleFactorY
 
-				f.fzr[x][y][_x][_y] = z3r
-				f.fzi[x][y][_x][_y] = z3i
+				for i := range f.subIterations {
+					z1r := f.fzr2[x][y][_x][_y]
+					z1i := f.fzi2[x][y][_x][_y]
 
-				f.fzr2[x][y][_x][_y] = z3r * z3r
-				f.fzi2[x][y][_x][_y] = z3i * z3i
+					if z1r+z1i > 4 {
+						f.explodesAt[x][y][_x][_y] = f.iterations + i
+						if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
+							f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
+						}
+						break
+					}
+
+					z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
+					z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
+
+					f.fzr[x][y][_x][_y] = z3r
+					f.fzi[x][y][_x][_y] = z3i
+
+					f.fzr2[x][y][_x][_y] = z3r * z3r
+					f.fzi2[x][y][_x][_y] = z3i * z3i
+				}
 			}
 		}
 	}

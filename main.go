@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"image"
@@ -98,12 +99,12 @@ func main() {
 
 	quitCh := make(chan bool)
 
-	image := image.NewRGBA(image.Rect(0, 0, width, height))
+	IMG := image.NewRGBA(image.Rect(0, 0, width, height))
 	ticker := time.NewTicker(time.Millisecond * 128)
 
 	chunkSizeX, chunkSizeY := params.chunkSizeX, params.chunkSizeY
 
-	engine := NewFastFloatEngine(FastFloatEngineParams{
+	engineParams := FastFloatEngineParams{
 		Width:   width,
 		Height:  height,
 		CenterX: &params.centerX, //Ptr(0.07318231460617092),
@@ -115,7 +116,8 @@ func main() {
 		SubIterations: &params.subiterations, //Ptr(500),
 		ChunkSizeX:    &params.chunkSizeX,    //Ptr(chunkSizeX),
 		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
-	})
+	}
+	engine := NewFastFloatEngine(engineParams)
 
 	var sampler Sampler
 	if params.sampler == "linear" {
@@ -151,7 +153,7 @@ func main() {
 			exited := false
 			select {
 			case <-ticker.C:
-				img := canvas.NewImageFromImage(image)
+				img := canvas.NewImageFromImage(IMG)
 				w.SetContent(img)
 
 			case <-quitCh:
@@ -164,18 +166,21 @@ func main() {
 		}
 	}()
 
+	iterationStoppedChannel := make(chan bool)
+	iterationContext, iterationContextCancel := context.WithCancel(context.TODO())
+
 	iterate := func(iteration int) {
 		fmt.Println("Iteration", iteration, "started")
 		engine.IncreaseIteration()
 		startTime := time.Now()
 
-		workerPool := pond.NewPool(128)
+		workerPool := pond.NewPool(128, pond.WithContext(iterationContext))
 
 		for k := range (height / engine.chunkSizeY) * (width / engine.chunkSizeX) {
 			P := sampler.Sample(k)
 			j, i := P.x, P.y
 			workerPool.Submit(func() {
-				engine.Perform(int32(j), int32(i))
+				engine.Perform(iterationContext, int32(j), int32(i))
 
 				X := chunkSizeX * int(j)
 				Y := chunkSizeY * int(i)
@@ -185,7 +190,7 @@ func main() {
 						px := X + x
 						py := Y + y
 
-						updateImage(image, px, py, color_converter, color_picker, engine)
+						updateImage(IMG, px, py, color_converter, color_picker, engine)
 					}
 				}
 			})
@@ -197,7 +202,7 @@ func main() {
 				px := j
 				py := i
 
-				updateImage(image, px, py, color_converter, color_picker, engine)
+				updateImage(IMG, px, py, color_converter, color_picker, engine)
 			}
 		}
 
@@ -207,28 +212,48 @@ func main() {
 		metric := math.Round(float64(1000*totalTime) / float64(engine.GetIterations()))
 		w.SetTitle("Mandelbrot: [" + fmt.Sprint(width, "x", height) + "] " + fmt.Sprint(engine.GetIterations()) + " iterations (" + fmt.Sprint(metric) + "ms / 1000 iterations)")
 
-		img := canvas.NewImageFromImage(image)
+		img := canvas.NewImageFromImage(IMG)
 		w.SetContent(img)
 
 		fmt.Println("Iteration", iteration, "completed successfully in ", duration, " ms")
 	}
 
-	go func() {
+	iterationLoop := func() {
 		for iterations := range params.iterations {
-			iterate(iterations)
+			select {
+			case <-iterationContext.Done():
+				iterationStoppedChannel <- true
+				return
+
+			default:
+				iterate(iterations)
+			}
 		}
 
 		fmt.Println("All iterations completed in ", totalTime, " ms")
-	}()
+	}
 
-	w.Canvas().SetOnTypedRune(func(r rune) {
-		switch r {
-		case 'q':
+	go iterationLoop()
+
+	resetWith := func(newParams FastFloatEngineParams) {
+		iterationContextCancel()
+		<-iterationStoppedChannel
+
+		iterationContext, iterationContextCancel = context.WithCancel(context.TODO())
+		engine = NewFastFloatEngine(newParams)
+
+		IMG = image.NewRGBA(image.Rect(0, 0, width, height))
+		go iterationLoop()
+	}
+
+	w.Canvas().SetOnTypedKey(func(ke *fyne.KeyEvent) {
+		switch ke.Name {
+		case fyne.KeyQ:
 			quitCh <- true
 			return
 
-		case 's':
-			im := image
+		case fyne.KeyS:
+			im := IMG
 
 			f, err := os.Create("mandelbrot.png")
 			if err != nil {
@@ -241,8 +266,39 @@ func main() {
 			}
 			f.Close()
 
-		case '+':
+		case fyne.KeyReturn:
 			iterate(engine.GetIterations() + 1)
+
+		case fyne.KeyR:
+			resetWith(engineParams)
+
+		case fyne.KeyPlus:
+			*engineParams.Scale++
+			resetWith(engineParams)
+
+		case fyne.KeyMinus:
+			*engineParams.Scale--
+			resetWith(engineParams)
+
+		case fyne.KeyLeft:
+			delta := 0.01 / float64(*engineParams.Scale)
+			engineParams.CenterX = Ptr(*engineParams.CenterX - delta)
+			resetWith(engineParams)
+
+		case fyne.KeyRight:
+			delta := 0.01 / float64(*engineParams.Scale)
+			engineParams.CenterX = Ptr(*engineParams.CenterX + delta)
+			resetWith(engineParams)
+
+		case fyne.KeyUp:
+			delta := 0.01 / float64(*engineParams.Scale)
+			engineParams.CenterY = Ptr(*engineParams.CenterY - delta)
+			resetWith(engineParams)
+
+		case fyne.KeyDown:
+			delta := 0.01 / float64(*engineParams.Scale)
+			engineParams.CenterY = Ptr(*engineParams.CenterY + delta)
+			resetWith(engineParams)
 		}
 
 	})
