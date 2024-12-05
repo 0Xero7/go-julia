@@ -11,6 +11,7 @@ type FastFloatEngine struct {
 	fzi           [][][][]float64
 	fzr2          [][][][]float64
 	fzi2          [][][][]float64
+	excluded      [][]bool
 	explodesAt    [][][][]int
 	image         *image.RGBA
 	maxExplodesAt int
@@ -47,6 +48,7 @@ func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 		fzr2:          Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
 		fzi2:          Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
 		explodesAt:    Create4D[int](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
+		excluded:      Create2D[bool](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX),
 		maxExplodesAt: 1,
 		scale:         Elvis(params.Scale, 1),
 		scaleFactorX:  float64(3) / float64(params.Width*Elvis(params.Scale, 1)),
@@ -67,6 +69,7 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 	X := x * int32(f.chunkSizeX)
 	Y := y * int32(f.chunkSizeY)
 
+	performCount := 0
 	for _x := range int32(f.chunkSizeX) {
 		for _y := range int32(f.chunkSizeY) {
 			select {
@@ -78,6 +81,7 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 				YY := Y + _y
 
 				if f.explodesAt[x][y][_x][_y] == 0 {
+					performCount++
 					dXX := float64(XX - int32(f.width/2))
 					dYY := float64(YY - int32(f.height/2))
 					_XX := f.centerX + dXX*f.scaleFactorX
@@ -118,6 +122,14 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 			}
 		}
 	}
+
+	if performCount == 0 {
+		f.excluded[x][y] = true
+	}
+}
+
+func (f *FastFloatEngine) CanSkipChunk(x, y int32) bool {
+	return f.excluded[x][y]
 }
 
 func (f *FastFloatEngine) GetChunkedArea() int {

@@ -14,6 +14,7 @@ type Engine interface {
 	GetIterations() int
 	GetChunkedArea() int
 	GetImage() *image.RGBA
+	CanSkipChunk(x, y int32) bool
 
 	IsStopped() bool
 	Stop()

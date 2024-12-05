@@ -179,7 +179,15 @@ func main() {
 
 		for k := range engineInstance.GetChunkedArea() {
 			P := sampler.Sample(k)
-			j, i := P.x, P.y
+			i, j := P.x, P.y
+
+			if engineInstance.IsStopped() {
+				return
+			}
+			if engineInstance.CanSkipChunk(i, j) {
+				continue
+			}
+
 			workerPool.Submit(func() {
 				engineInstance.Perform(iterationContext, int32(j), int32(i))
 
