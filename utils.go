@@ -69,7 +69,7 @@ func Ptr[T any](val T) *T {
 
 func updateImage(img *image.RGBA, px, py int, colorRange ColorRangeConverer, colorPicker ColorOf, engine Engine) {
 	explodesAt := engine.GetExplodesAt(int32(px), int32(py))
-	if explodesAt == 0 {
+	if explodesAt <= 0 {
 		img.Set(int(px), int(py), color.Black)
 	} else {
 		// fac := math.Log(1+float64(explodesAt)) / math.Log(1+float64(engine.GetMaxExplodesAt()))

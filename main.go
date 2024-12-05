@@ -99,7 +99,7 @@ func main() {
 
 	chunkSizeX, chunkSizeY := params.chunkSizeX, params.chunkSizeY
 
-	engineParams := DerbailEngineParams{
+	engineParams := FastFloatEngineParams{
 		Width:   width,
 		Height:  height,
 		CenterX: &params.centerX, //Ptr(0.07318231460617092),
@@ -111,7 +111,6 @@ func main() {
 		SubIterations: &params.subiterations, //Ptr(500),
 		ChunkSizeX:    &params.chunkSizeX,    //Ptr(chunkSizeX),
 		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
-		Bailout:       &params.bailout,
 	}
 
 	var sampler Sampler
@@ -147,7 +146,7 @@ func main() {
 	iterationContext, iterationContextCancel := context.WithCancel(context.TODO())
 
 	// engineX := NewFastFloatEngine(engineParams)
-	engineX := NewDerbailEngine(engineParams)
+	engineX := NewFastFloatEngine(engineParams)
 
 	// func() {
 	// 	for {
@@ -243,12 +242,12 @@ func main() {
 	}
 	go iterationLoop(engineX)
 
-	resetWith := func(newParams DerbailEngineParams) {
+	resetWith := func(newParams FastFloatEngineParams) {
 		iterationContextCancel()
 		engineX.Stop()
 
 		iterationContext, iterationContextCancel = context.WithCancel(context.TODO())
-		engineX = NewDerbailEngine(newParams)
+		engineX = NewFastFloatEngine(newParams)
 		go iterationLoop(engineX)
 	}
 

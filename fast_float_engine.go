@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"image"
+	"math"
 )
 
 type FastFloatEngine struct {
@@ -76,35 +77,49 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 				XX := X + int32(_x)
 				YY := Y + int32(_y)
 
-				if f.explodesAt[x][y][_x][_y] > 0 {
-					continue
-				}
+				if f.explodesAt[x][y][_x][_y] == 0 {
+					dXX := float64(XX - int32(f.width/2))
+					dYY := float64(YY - int32(f.height/2))
+					_XX := f.centerX + dXX*f.scaleFactorX
+					_YY := f.centerY + dYY*f.scaleFactorY
 
-				dXX := float64(XX - int32(f.width/2))
-				dYY := float64(YY - int32(f.height/2))
-				_XX := f.centerX + dXX*f.scaleFactorX
-				_YY := f.centerY + dYY*f.scaleFactorY
+					history_r_0 := -1.0
+					history_i_0 := -1.0
+					history_r_1 := -1.0
+					history_i_1 := -1.0
+					history_r_2 := -1.0
+					history_i_2 := -1.0
 
-				for i := range f.subIterations {
-					z1r := f.fzr2[x][y][_x][_y]
-					z1i := f.fzi2[x][y][_x][_y]
+					for i := range f.subIterations {
+						z1r := f.fzr2[x][y][_x][_y]
+						z1i := f.fzi2[x][y][_x][_y]
 
-					if z1r+z1i > 4 {
-						f.explodesAt[x][y][_x][_y] = f.iterations + i
-						if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
-							f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
+						if z1r+z1i > 4 {
+							f.explodesAt[x][y][_x][_y] = f.iterations + i
+							if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
+								f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
+							}
+							break
 						}
-						break
+
+						z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
+						z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
+
+						if (math.Abs(history_r_0-z3r) < 0.0001 && math.Abs(history_i_0-z3i) < 0.0001) ||
+							(math.Abs(history_r_1-z3r) < 0.0001 && math.Abs(history_i_1-z3i) < 0.0001) {
+							f.explodesAt[x][y][_x][_y] = -1
+						}
+
+						history_r_0, history_i_0 = history_r_1, history_i_1
+						history_r_1, history_i_1 = history_r_2, history_i_2
+						history_r_2, history_i_2 = z3r, z3i
+
+						f.fzr[x][y][_x][_y] = z3r
+						f.fzi[x][y][_x][_y] = z3i
+
+						f.fzr2[x][y][_x][_y] = z3r * z3r
+						f.fzi2[x][y][_x][_y] = z3i * z3i
 					}
-
-					z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
-					z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
-
-					f.fzr[x][y][_x][_y] = z3r
-					f.fzi[x][y][_x][_y] = z3i
-
-					f.fzr2[x][y][_x][_y] = z3r * z3r
-					f.fzi2[x][y][_x][_y] = z3i * z3i
 				}
 			}
 		}
