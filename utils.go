@@ -13,6 +13,19 @@ func Create2D[T any](n, m int) [][]T {
 	return result
 }
 
+func Create2DWithValue[T any](n, m int, value T) [][]T {
+	result := make([][]T, n)
+	for i := range result {
+		result[i] = make([]T, m)
+	}
+	for i := range n {
+		for j := range m {
+			result[i][j] = value
+		}
+	}
+	return result
+}
+
 func Create4D[T any](n, m, a, b int) [][][][]T {
 	result := make([][][][]T, n)
 	for i := range result {
@@ -22,6 +35,21 @@ func Create4D[T any](n, m, a, b int) [][][][]T {
 	for i := range n {
 		for j := range m {
 			val := Create2D[T](a, b)
+			result[i][j] = val
+		}
+	}
+	return result
+}
+
+func Create4DWithValue[T any](n, m, a, b int, value T) [][][][]T {
+	result := make([][][][]T, n)
+	for i := range result {
+		result[i] = make([][][]T, m)
+	}
+
+	for i := range n {
+		for j := range m {
+			val := Create2DWithValue[T](a, b, value)
 			result[i][j] = val
 		}
 	}
