@@ -67,15 +67,15 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 	X := x * int32(f.chunkSizeX)
 	Y := y * int32(f.chunkSizeY)
 
-	for _x := 0; _x < f.chunkSizeX; _x++ {
-		for _y := 0; _y < f.chunkSizeY; _y++ {
+	for _x := range int32(f.chunkSizeX) {
+		for _y := range int32(f.chunkSizeY) {
 			select {
 			case <-context.Done():
 				return
 
 			default:
-				XX := X + int32(_x)
-				YY := Y + int32(_y)
+				XX := X + _x
+				YY := Y + _y
 
 				if f.explodesAt[x][y][_x][_y] == 0 {
 					dXX := float64(XX - int32(f.width/2))
@@ -96,17 +96,15 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 
 						if z1r+z1i > 4 {
 							f.explodesAt[x][y][_x][_y] = f.iterations + i
-							if f.explodesAt[x][y][_x][_y] > f.maxExplodesAt {
-								f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
-							}
+							f.maxExplodesAt = max(f.maxExplodesAt, f.explodesAt[x][y][_x][_y])
 							break
 						}
 
 						z3i := float64(2)*f.fzr[x][y][_x][_y]*f.fzi[x][y][_x][_y] + _YY
 						z3r := f.fzr2[x][y][_x][_y] - f.fzi2[x][y][_x][_y] + _XX
 
-						if (math.Abs(history_r_0-z3r) < 0.0001 && math.Abs(history_i_0-z3i) < 0.0001) ||
-							(math.Abs(history_r_1-z3r) < 0.0001 && math.Abs(history_i_1-z3i) < 0.0001) {
+						if (math.Abs(history_r_0-z3r)+math.Abs(history_i_0-z3i) < 0.0001) ||
+							(math.Abs(history_r_1-z3r)+math.Abs(history_i_1-z3i) < 0.0001) {
 							f.explodesAt[x][y][_x][_y] = -1
 						}
 
@@ -114,11 +112,7 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 						history_r_1, history_i_1 = history_r_2, history_i_2
 						history_r_2, history_i_2 = z3r, z3i
 
-						f.fzr[x][y][_x][_y] = z3r
-						f.fzi[x][y][_x][_y] = z3i
-
-						f.fzr2[x][y][_x][_y] = z3r * z3r
-						f.fzi2[x][y][_x][_y] = z3i * z3i
+						f.fzr[x][y][_x][_y], f.fzi[x][y][_x][_y], f.fzr2[x][y][_x][_y], f.fzi2[x][y][_x][_y] = z3r, z3i, z3r*z3r, z3i*z3i
 					}
 				}
 			}
