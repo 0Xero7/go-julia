@@ -79,9 +79,9 @@ func (f *DerbailEngine) Perform(context context.Context, x, y int32) {
 				XX := X + int32(_x)
 				YY := Y + int32(_y)
 
-				// if f.explodesAt[x][y][_x][_y] > 0 {
-				// 	continue
-				// }
+				if f.explodesAt[x][y][_x][_y] > 0 {
+					continue
+				}
 
 				dXX := float64(XX - int32(f.width/2))
 				dYY := float64(YY - int32(f.height/2))
@@ -99,8 +99,6 @@ func (f *DerbailEngine) Perform(context context.Context, x, y int32) {
 							f.maxExplodesAt = f.explodesAt[x][y][_x][_y]
 						}
 						break
-					} else {
-						f.explodesAt[x][y][_x][_y] = 0
 					}
 
 					f.zdashn[x][y][_x][_y] = new_zdash

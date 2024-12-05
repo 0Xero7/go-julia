@@ -22,6 +22,7 @@ type cliParams struct {
 	width, height          int
 	chunkSizeX, chunkSizeY int
 	centerX, centerY       float64
+	bailout                float64
 	scale                  int
 	subiterations          int
 	iterations             int
@@ -82,6 +83,7 @@ func main() {
 	flag.StringVar(&params.sampler, "sampler", "linear", "which sampler to use (linear/hilbert)")
 	flag.StringVar(&params.colorOf, "color", "spectral", "which color picker to use (spectral/gradient)")
 	flag.StringVar(&params.colorGradientPath, "path", ".", "if gradient color picker, the path of the image from which to sample the colors")
+	flag.Float64Var(&params.bailout, "bailout", 1e4, "bailout value for derbail engine")
 	flag.Parse()
 
 	verify(params)
@@ -109,6 +111,7 @@ func main() {
 		SubIterations: &params.subiterations, //Ptr(500),
 		ChunkSizeX:    &params.chunkSizeX,    //Ptr(chunkSizeX),
 		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
+		Bailout:       &params.bailout,
 	}
 
 	var sampler Sampler
