@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"image"
 	"image/png"
 	"log"
 	"math"
@@ -87,10 +86,6 @@ func main() {
 
 	verify(params)
 
-	// Idk why
-	params.centerX -= 1.5 / float64(params.scale)
-	params.centerY -= 1.5 / float64(params.scale)
-
 	a := app.New()
 	w := a.NewWindow("Mandelbrot")
 
@@ -98,9 +93,7 @@ func main() {
 	var height = params.height
 
 	quitCh := make(chan bool)
-
-	IMG := image.NewRGBA(image.Rect(0, 0, width, height))
-	ticker := time.NewTicker(time.Millisecond * 128)
+	// ticker := time.NewTicker(time.Millisecond * 2500)
 
 	chunkSizeX, chunkSizeY := params.chunkSizeX, params.chunkSizeY
 
@@ -117,7 +110,6 @@ func main() {
 		ChunkSizeX:    &params.chunkSizeX,    //Ptr(chunkSizeX),
 		ChunkSizeY:    &params.chunkSizeY,    //Ptr(chunkSizeY),
 	}
-	engine := NewFastFloatEngine(engineParams)
 
 	var sampler Sampler
 	if params.sampler == "linear" {
@@ -148,39 +140,49 @@ func main() {
 
 	totalTime := 0
 
-	go func() {
-		for {
-			exited := false
-			select {
-			case <-ticker.C:
-				img := canvas.NewImageFromImage(IMG)
-				w.SetContent(img)
-
-			case <-quitCh:
-				exited = true
-			}
-
-			if exited {
-				break
-			}
-		}
-	}()
-
-	iterationStoppedChannel := make(chan bool)
+	// iterationStoppedChannel := make(chan bool)
 	iterationContext, iterationContextCancel := context.WithCancel(context.TODO())
 
-	iterate := func(iteration int) {
+	engineX := NewFastFloatEngine(engineParams)
+
+	// func() {
+	// 	for {
+	// 		exited := false
+	// 		select {
+	// 		case <-ticker.C:
+	// 			img := canvas.NewImageFromImage(engineX.GetImage())
+	// 			w.SetContent(img)
+
+	// 		case <-quitCh:
+	// 			exited = true
+	// 		}
+
+	// 		if exited {
+	// 			break
+	// 		}
+	// 	}
+	// }()
+
+	iterate := func(engineInstance Engine, iteration int) {
+		if engineInstance.IsStopped() {
+			return
+		}
+
 		fmt.Println("Iteration", iteration, "started")
-		engine.IncreaseIteration()
+		engineInstance.IncreaseIteration()
 		startTime := time.Now()
 
 		workerPool := pond.NewPool(128, pond.WithContext(iterationContext))
 
-		for k := range (height / engine.chunkSizeY) * (width / engine.chunkSizeX) {
+		for k := range engineInstance.GetChunkedArea() {
 			P := sampler.Sample(k)
 			j, i := P.x, P.y
 			workerPool.Submit(func() {
-				engine.Perform(iterationContext, int32(j), int32(i))
+				engineInstance.Perform(iterationContext, int32(j), int32(i))
+
+				if engineInstance.IsStopped() {
+					return
+				}
 
 				X := chunkSizeX * int(j)
 				Y := chunkSizeY * int(i)
@@ -190,7 +192,11 @@ func main() {
 						px := X + x
 						py := Y + y
 
-						updateImage(IMG, px, py, color_converter, color_picker, engine)
+						if engineInstance.IsStopped() {
+							return
+						}
+
+						updateImage(engineInstance.GetImage(), px, py, color_converter, color_picker, engineInstance)
 					}
 				}
 			})
@@ -202,48 +208,44 @@ func main() {
 				px := j
 				py := i
 
-				updateImage(IMG, px, py, color_converter, color_picker, engine)
+				updateImage(engineInstance.GetImage(), px, py, color_converter, color_picker, engineInstance)
 			}
 		}
 
 		endTime := time.Now()
 		duration := endTime.Sub(startTime).Milliseconds()
 		totalTime += int(duration)
-		metric := math.Round(float64(1000*totalTime) / float64(engine.GetIterations()))
-		w.SetTitle("Mandelbrot: [" + fmt.Sprint(width, "x", height) + "] " + fmt.Sprint(engine.GetIterations()) + " iterations (" + fmt.Sprint(metric) + "ms / 1000 iterations)")
+		metric := math.Round(float64(1000*totalTime) / float64(engineInstance.GetIterations()))
+		w.SetTitle("Mandelbrot: [" + fmt.Sprint(width, "x", height) + "] " + fmt.Sprint(engineInstance.GetIterations()) + " iterations (" + fmt.Sprint(metric) + "ms / 1000 iterations)")
 
-		img := canvas.NewImageFromImage(IMG)
+		img := canvas.NewImageFromImage(engineInstance.GetImage())
 		w.SetContent(img)
 
 		fmt.Println("Iteration", iteration, "completed successfully in ", duration, " ms")
 	}
 
-	iterationLoop := func() {
+	iterationLoop := func(engine Engine) {
 		for iterations := range params.iterations {
 			select {
 			case <-iterationContext.Done():
-				iterationStoppedChannel <- true
 				return
 
 			default:
-				iterate(iterations)
+				iterate(engine, iterations)
 			}
 		}
 
 		fmt.Println("All iterations completed in ", totalTime, " ms")
 	}
-
-	go iterationLoop()
+	go iterationLoop(engineX)
 
 	resetWith := func(newParams FastFloatEngineParams) {
 		iterationContextCancel()
-		<-iterationStoppedChannel
+		engineX.Stop()
 
 		iterationContext, iterationContextCancel = context.WithCancel(context.TODO())
-		engine = NewFastFloatEngine(newParams)
-
-		IMG = image.NewRGBA(image.Rect(0, 0, width, height))
-		go iterationLoop()
+		engineX = NewFastFloatEngine(newParams)
+		go iterationLoop(engineX)
 	}
 
 	w.Canvas().SetOnTypedKey(func(ke *fyne.KeyEvent) {
@@ -253,7 +255,7 @@ func main() {
 			return
 
 		case fyne.KeyS:
-			im := IMG
+			im := engineX.GetImage()
 
 			f, err := os.Create("mandelbrot.png")
 			if err != nil {
@@ -267,7 +269,7 @@ func main() {
 			f.Close()
 
 		case fyne.KeyReturn:
-			iterate(engine.GetIterations() + 1)
+			iterate(engineX, engineX.GetIterations()+1)
 
 		case fyne.KeyR:
 			resetWith(engineParams)

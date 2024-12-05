@@ -1,6 +1,9 @@
 package main
 
-import "context"
+import (
+	"context"
+	"image"
+)
 
 type FastFloatEngine struct {
 	fzr           [][][][]float64
@@ -8,6 +11,7 @@ type FastFloatEngine struct {
 	fzr2          [][][][]float64
 	fzi2          [][][][]float64
 	explodesAt    [][][][]int
+	image         *image.RGBA
 	maxExplodesAt int
 
 	width, height              int
@@ -21,6 +25,8 @@ type FastFloatEngine struct {
 	chunkSizeX, chunkSizeY int
 
 	iterations int
+
+	stopped bool
 }
 
 type FastFloatEngineParams struct {
@@ -33,6 +39,8 @@ type FastFloatEngineParams struct {
 
 func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 	engine := FastFloatEngine{
+		width:         params.Width,
+		height:        params.Height,
 		fzr:           Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
 		fzi:           Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
 		fzr2:          Create4D[float64](params.Height / *params.ChunkSizeY, params.Width / *params.ChunkSizeX, Elvis(params.ChunkSizeX, 1), Elvis(params.ChunkSizeY, 1)),
@@ -48,6 +56,7 @@ func NewFastFloatEngine(params FastFloatEngineParams) *FastFloatEngine {
 		iterations:    1,
 		chunkSizeX:    Elvis(params.ChunkSizeX, 1),
 		chunkSizeY:    Elvis(params.ChunkSizeY, 1),
+		image:         image.NewRGBA(image.Rect(0, 0, params.Width, params.Height)),
 	}
 
 	return &engine
@@ -102,6 +111,10 @@ func (f *FastFloatEngine) Perform(context context.Context, x, y int32) {
 	}
 }
 
+func (f *FastFloatEngine) GetChunkedArea() int {
+	return (f.width / f.chunkSizeX) * (f.height / f.chunkSizeY)
+}
+
 func (f *FastFloatEngine) GetExplodesAt(x, y int32) int {
 	xx := x / int32(f.chunkSizeX)
 	xy := x % int32(f.chunkSizeX)
@@ -122,4 +135,20 @@ func (f *FastFloatEngine) IncreaseIteration() {
 
 func (f *FastFloatEngine) GetIterations() int {
 	return f.iterations
+}
+
+func (f *FastFloatEngine) ResetImage() {
+	f.image = image.NewRGBA(image.Rect(0, 0, f.width, f.height))
+}
+
+func (f *FastFloatEngine) GetImage() *image.RGBA {
+	return f.image
+}
+
+func (f *FastFloatEngine) IsStopped() bool {
+	return f.stopped
+}
+
+func (f *FastFloatEngine) Stop() {
+	f.stopped = true
 }
